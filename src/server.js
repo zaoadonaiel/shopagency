@@ -54,6 +54,19 @@ const emailTaken = (error) => error && (error.code === 'email_exists' || error.c
 // Where Supabase sends people back to after an invite or password-reset email.
 const EMAIL_LINK_REDIRECT = `${APP_URL}/auth/callback?next=/set-password`;
 
+// Health check: says which settings are present (yes/no only, never the values) and whether the database answers.
+app.get('/healthz', async (req, res) => {
+  const has = (k) => !!(process.env[k] && process.env[k].trim());
+  const out = { supabaseUrl: has('SUPABASE_URL'), anonKey: has('SUPABASE_ANON_KEY'), serviceRoleKey: has('SUPABASE_SERVICE_ROLE_KEY'), stripe: has('STRIPE_SECRET_KEY'), smtp: has('SMTP_HOST') };
+  try {
+    const { error } = await sb.from('packages').select('id').limit(1);
+    out.database = error ? `error: ${error.message}` : 'ok';
+  } catch (err) {
+    out.database = `error: ${err.message}`;
+  }
+  res.status(out.database === 'ok' ? 200 : 503).json(out);
+});
+
 // ---------- Public: package menu ----------
 app.get('/', async (req, res) => {
   if (req.user && req.user.role !== 'buyer') return res.redirect(home(req.user));
