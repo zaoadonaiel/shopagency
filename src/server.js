@@ -27,12 +27,18 @@ app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), async (r
   if (event.type === 'checkout.session.completed') {
     const s = event.data.object;
     const orderId = Number(s.metadata && s.metadata.order_id);
+    let paymentIntent = s.payment_intent;
     let fee = null;
     try {
-      const pi = await stripe.paymentIntents.retrieve(s.payment_intent, { expand: ['latest_charge.balance_transaction'] });
+      // A subscription checkout has no payment intent of its own: the first month is paid through its first invoice.
+      if (!paymentIntent && s.invoice) {
+        const payments = await stripe.invoicePayments.list({ invoice: s.invoice, limit: 1 });
+        paymentIntent = (payments.data[0] && payments.data[0].payment.payment_intent) || null;
+      }
+      const pi = await stripe.paymentIntents.retrieve(paymentIntent, { expand: ['latest_charge.balance_transaction'] });
       fee = pi.latest_charge.balance_transaction.fee;
     } catch (err) { /* fall back to the estimate */ }
-    if (orderId) await jobs.markPaid(orderId, { paymentIntent: s.payment_intent, feeCents: fee });
+    if (orderId) await jobs.markPaid(orderId, { paymentIntent, subscription: s.subscription || null, feeCents: fee });
   }
   res.json({ received: true });
 });
@@ -49,6 +55,8 @@ const isAdmin = (u) => u.role === 'admin';
 const safeNext = (next, fallback) => (next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : fallback);
 // "$25.00/month" for a monthly package, "$50.00" for a one-time one.
 const price = (p) => `<b>${money(p.price_cents)}</b>${p.billing_interval ? `<span class="muted">/${esc(p.billing_interval)}</span>` : ''}`;
+// Website builds need the buyer's Avada license code. Hosting and Zao Chat & Zao Flo do not.
+const needsAvada = (p) => p.needs_avada_code !== false;
 const getPackage = async (id) => (isId(id) ? q(sb.from('packages').select('*').eq('id', id).eq('active', true).maybeSingle()) : null);
 const messagesFor = (orderId) => q(sb.from('messages').select('*').eq('order_id', orderId).order('id'));
 const emailTaken = (error) => error && (error.code === 'email_exists' || error.code === 'user_already_exists' || /already (been )?registered|already exists/i.test(error.message));
@@ -75,7 +83,7 @@ app.get('/', async (req, res) => {
   const pk = await q(sb.from('packages').select('*').eq('active', true).order('id'));
   send(req, res, 'Order a website', `<p class="muted">Pick a package. Our 24-hour team builds it on our hosting, and emails you when it is ready.</p>
   <div class="grid">${pk.map((p) => `<div class="card"><h2 style="margin-top:0">${esc(p.name)}</h2><p>${esc(p.description)}</p><p>${price(p)}</p><a class="btn" href="/order/${p.id}">${p.billing_interval ? 'Subscribe' : 'Order'}</a></div>`).join('')}</div>
-  <p class="muted">You need your own Avada license (about $80, one time) and will enter its purchase code when you order.</p>`);
+  <p class="muted">For Avada Setup you need your own Avada license (about $80, one time) and will enter its purchase code when you order. Monthly packages renew every month until cancelled.</p>`);
 });
 
 // ---------- Accounts (Supabase Auth) ----------
@@ -188,27 +196,31 @@ app.get('/order/:pid', auth.requireRole('buyer'), async (req, res) => {
     <p>${esc(p.description)}</p><p>${price(p)}</p>
     <label for="business_name">Business name</label><input id="business_name" name="business_name" required>
     <label for="domain">Domain (if you have one)</label><input id="domain" name="domain" placeholder="example.com">
-    <label for="avada_code">Avada license purchase code</label><input id="avada_code" name="avada_code" required>
+    ${needsAvada(p) ? '<label for="avada_code">Avada license purchase code</label><input id="avada_code" name="avada_code" required>' : ''}
     <label for="turnaround">Turnaround</label><select id="turnaround" name="turnaround"><option value="24h">24 hours</option><option value="3d" selected>1 to 3 business days</option></select>
-    <label for="notes">What should the site say and look like? Logo, colors, page list, links to examples.</label><textarea id="notes" name="notes" rows="6" required></textarea>
-    <p><button type="submit">Continue to payment</button></p></form>`);
+    <label for="notes">${needsAvada(p) ? 'What should the site say and look like? Logo, colors, page list, links to examples.' : 'Tell us about your client: their website, what they do, and anything we should know to set this up.'}</label><textarea id="notes" name="notes" rows="6" required></textarea>
+    ${p.billing_interval ? `<p class="muted">You will be charged ${money(p.price_cents)} now and every ${esc(p.billing_interval)} after that until you cancel.</p>` : ''}
+    <p><button type="submit">${p.billing_interval ? 'Continue to subscribe' : 'Continue to payment'}</button></p></form>`);
 });
 
 app.post('/order/:pid', auth.requireRole('buyer'), async (req, res) => {
   const p = await getPackage(req.params.pid);
   const b = req.body;
-  if (!p || !b.business_name || !b.avada_code || !b.notes) return back(res, `/order/${req.params.pid}`, 'Fill in every required field.');
+  if (!p || !b.business_name || (needsAvada(p) && !b.avada_code) || !b.notes) return back(res, `/order/${req.params.pid}`, 'Fill in every required field.');
   const turnaround = b.turnaround === '24h' ? '24h' : '3d';
   const row = await q(sb.from('orders').insert({
     buyer_id: req.user.id, package_id: p.id, package_name: p.name, price_cents: p.price_cents, contractor_pct: p.contractor_pct,
     turnaround, turnaround_hours: turnaround === '24h' ? 24 : 72,
-    business_name: b.business_name.trim(), domain: (b.domain || '').trim(), avada_code: b.avada_code.trim(), notes: b.notes.trim(),
+    business_name: b.business_name.trim(), domain: (b.domain || '').trim(), avada_code: needsAvada(p) ? b.avada_code.trim() : '', notes: b.notes.trim(),
   }).select('id').single());
   const id = row.id;
   if (!stripe) return res.redirect(`/dev/pay/${id}`);
+  // Monthly packages are Stripe subscriptions: this month is charged now, then every month until cancelled.
+  const recurring = p.billing_interval ? { recurring: { interval: p.billing_interval } } : {};
   const session = await stripe.checkout.sessions.create({
-    mode: 'payment', customer_email: req.user.email, client_reference_id: String(id), metadata: { order_id: String(id) },
-    line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: p.price_cents, product_data: { name: p.name } } }],
+    mode: p.billing_interval ? 'subscription' : 'payment', customer_email: req.user.email, client_reference_id: String(id), metadata: { order_id: String(id) },
+    ...(p.billing_interval ? { subscription_data: { metadata: { order_id: String(id) } } } : {}),
+    line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: p.price_cents, product_data: { name: p.name }, ...recurring } }],
     success_url: `${APP_URL}/orders/${id}?msg=${encodeURIComponent('Payment received. Our team is on it.')}`,
     cancel_url: `${APP_URL}/orders/${id}?msg=${encodeURIComponent('Payment was cancelled.')}`,
   });
@@ -309,7 +321,7 @@ app.get('/jobs/:id', claimers, async (req, res) => {
     <label for="pages_built">Pages built</label><input id="pages_built" type="number" min="1" name="pages_built" required>
     <p class="muted">The buyer gets an email with the site link, the page count and a one-time WordPress login link.</p><p><button type="submit">Mark done and email the buyer</button></p></form>` : '';
   send(req, res, `Job #${o.id}: ${o.package_name}`, `<div class="card"><p>${pill(o)} &nbsp; Due: <b>${when(o.due_at)}</b> &nbsp; You earn: <b>${pay}</b></p>
-    <p><b>Buyer:</b> ${esc(buyerFirst)}<br><b>Business:</b> ${esc(o.business_name)}<br><b>Domain:</b> ${esc(o.domain) || 'none yet'}<br><b>Avada purchase code:</b> ${esc(o.avada_code)}</p>
+    <p><b>Buyer:</b> ${esc(buyerFirst)}<br><b>Business:</b> ${esc(o.business_name)}<br><b>Domain:</b> ${esc(o.domain) || 'none yet'}${o.avada_code ? `<br><b>Avada purchase code:</b> ${esc(o.avada_code)}` : ''}</p>
     <p><b>Brief:</b><br>${esc(o.notes).replace(/\n/g, '<br>')}</p>
     <p><b>Site:</b> ${esc(o.site_url) || 'being created'}<br><b>WordPress admin:</b> ${esc(o.admin_url)}<br><b>Username:</b> ${esc(o.wp_username)}</p></div>
     ${done}${messagesBlock(o, msgs, names, `/jobs/${o.id}/message`)}`);
@@ -364,7 +376,7 @@ app.get('/admin/orders/:id', admin, async (req, res) => {
   const buyer = await jobs.getUser(o.buyer_id);
   const btn = (action, label, cls = 'alt') => `<form class="inline" method="post" action="/admin/orders/${o.id}/${action}"><button class="${cls}" type="submit">${label}</button></form>`;
   send(req, res, `Order #${o.id}: ${o.package_name}`, `<div class="card"><p>${pill(o)} ${o.hold_reason ? `<span class="muted">Hold: ${esc(o.hold_reason)}</span>` : ''}</p>
-    <p><b>Buyer:</b> ${esc(buyer.name)} (${esc(buyer.email)})<br><b>Business:</b> ${esc(o.business_name)} &middot; ${esc(o.domain)}<br><b>Avada code:</b> ${esc(o.avada_code)}<br>
+    <p><b>Buyer:</b> ${esc(buyer.name)} (${esc(buyer.email)})<br><b>Business:</b> ${esc(o.business_name)} &middot; ${esc(o.domain)}${o.avada_code ? `<br><b>Avada code:</b> ${esc(o.avada_code)}` : ''}<br>
     <b>Contractor:</b> ${esc(names[o.contractor_id] || 'none')}<br><b>Due:</b> ${when(o.due_at)}<br>
     <b>Price:</b> ${money(o.price_cents)} &middot; <b>Card fee:</b> ${money(o.card_fee_cents)} &middot; <b>Contractor share:</b> ${o.contractor_pct}%</p>
     <p><b>Brief:</b><br>${esc(o.notes).replace(/\n/g, '<br>')}</p>${excl.length ? `<p><b>Excluded:</b> ${excl.map((e) => esc(e.name + ' (' + e.reason + ')')).join(', ')}</p>` : ''}

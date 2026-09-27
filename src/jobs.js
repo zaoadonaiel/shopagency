@@ -37,12 +37,14 @@ async function announceOpen(order, subjectPrefix = 'New job') {
 
 // Called after payment succeeds (Stripe webhook, or the dev "pay" button).
 // The UPDATE only matches a pending order, so a retried webhook cannot announce the job twice.
-async function markPaid(orderId, { paymentIntent = null, feeCents = null } = {}) {
+async function markPaid(orderId, { paymentIntent = null, subscription = null, feeCents = null } = {}) {
   const o = await getOrder(orderId);
   if (!o || o.status !== 'pending_payment') return false;
   const t = now();
+  const paid = { status: 'open', paid_at: t, open_since: t, stripe_payment_intent: paymentIntent, card_fee_cents: feeCents ?? estimateFee(o.price_cents) };
+  if (subscription) paid.stripe_subscription_id = subscription;
   const rows = await q(sb.from('orders')
-    .update({ status: 'open', paid_at: t, open_since: t, stripe_payment_intent: paymentIntent, card_fee_cents: feeCents ?? estimateFee(o.price_cents) })
+    .update(paid)
     .eq('id', orderId).eq('status', 'pending_payment').select());
   if (!rows.length) return false;
   await announceOpen(rows[0]);
@@ -138,10 +140,15 @@ async function refund(orderId) {
   const o = await getOrder(orderId);
   if (!o || ['pending_payment', 'refunded', 'cancelled'].includes(o.status)) return { ok: false, error: 'Nothing to refund.' };
   if (o.paid_out_at) return { ok: false, error: 'The contractor was already paid for this order.' };
-  if (o.stripe_payment_intent && process.env.STRIPE_SECRET_KEY) {
+  if ((o.stripe_payment_intent || o.stripe_subscription_id) && process.env.STRIPE_SECRET_KEY) {
     try {
       const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-      await stripe.refunds.create({ payment_intent: o.stripe_payment_intent });
+      // A monthly package: stop the subscription first so no later month is charged.
+      if (o.stripe_subscription_id) {
+        const sub = await stripe.subscriptions.retrieve(o.stripe_subscription_id);
+        if (sub.status !== 'canceled') await stripe.subscriptions.cancel(o.stripe_subscription_id);
+      }
+      if (o.stripe_payment_intent) await stripe.refunds.create({ payment_intent: o.stripe_payment_intent });
     } catch (err) {
       return { ok: false, error: 'Stripe refund failed: ' + err.message };
     }
