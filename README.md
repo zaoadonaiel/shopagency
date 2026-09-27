@@ -2,6 +2,8 @@
 
 A small job marketplace. A buyer orders a WordPress site package, pays by card, and the **first contractor to click Claim gets the job**. The site is created on the **owner's hosting**, the contractor builds it, and the buyer is emailed the site link, page count and a one-time WordPress login link. The owner keeps 60% of each order (minus card fees) and the contractor earns 40%. Payouts are weekly and only the owner sees the full picture.
 
+Live at **https://shop.theagencyschool.com** (Cloudflare Workers, deployed automatically from `main`).
+
 Stack: Node 18+, Express, Supabase (Postgres + Supabase Auth), Stripe Checkout, SMTP email. No build step. Runs on Cloudflare Workers (`npm run deploy`) or any Node server (`npm start`).
 
 ## 1. Create the Supabase project
