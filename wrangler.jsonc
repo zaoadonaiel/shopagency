@@ -11,7 +11,7 @@
   // are set with `npx wrangler secret put NAME` and never go in this file.
   "vars": {
     "APP_URL": "https://shop.theagencyschool.com",
-    "MAIL_FROM": "The Agency School <no-reply@theagencyschool.com>",
+    "MAIL_FROM": "The Agency School <info@theagencyschool.com>",
     "UNCLAIMED_ALERT_HOURS": "2",
     "AUTO_APPROVE_HOURS": "48"
   }
