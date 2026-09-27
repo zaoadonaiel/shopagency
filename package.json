@@ -1,0 +1,30 @@
+{
+  "name": "agency-school-shop",
+  "version": "1.0.0",
+  "description": "Job marketplace: buyers order WordPress sites, contractors claim them, owner splits each order.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node scripts/smoke-test.js",
+    "create-admin": "node scripts/create-admin.js",
+    "dev:worker": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "nodemailer": "^10.0.10",
+    "stripe": "^22.6.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "wrangler": "^4.141.0"
+  }
+}

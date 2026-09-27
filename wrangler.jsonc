@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agency-shop",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // Every minute: reminders, missed deadlines, unclaimed alerts, auto-approval.
+  "triggers": { "crons": ["* * * * *"] },
+  // Non-secret settings. Secrets (Supabase keys, Stripe keys, SMTP/email API keys, provisioning token)
+  // are set with `npx wrangler secret put NAME` and never go in this file.
+  "vars": {
+    "APP_URL": "https://shop.theagencyschool.com",
+    "MAIL_FROM": "The Agency School <no-reply@theagencyschool.com>",
+    "UNCLAIMED_ALERT_HOURS": "2",
+    "AUTO_APPROVE_HOURS": "48"
+  }
+}
