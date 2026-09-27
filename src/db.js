@@ -11,13 +11,17 @@ const { createClient } = require('@supabase/supabase-js');
 const url = process.env.SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const anonKey = process.env.SUPABASE_ANON_KEY;
-if (!url || !serviceKey || !anonKey) {
-  throw new Error('Set SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY in .env');
-}
+const configured = !!(url && serviceKey && anonKey);
+const MISSING = 'Set SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY (.env, or Cloudflare secrets)';
+
+// Without the keys the app still starts (so a first Cloudflare deploy can succeed before the secrets
+// are added), but every database call fails with a clear message.
+const notConfigured = () => new Proxy({}, { get() { throw new Error(MISSING); } });
+if (!configured) console.error(MISSING);
 
 const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
-const sb = createClient(url, serviceKey, options);
-const anonClient = () => createClient(url, anonKey, options);
+const sb = configured ? createClient(url, serviceKey, options) : notConfigured();
+const anonClient = () => (configured ? createClient(url, anonKey, options) : notConfigured());
 
 // Awaits a query and returns its data, throwing on any database error.
 async function q(query) {
