@@ -42,7 +42,7 @@ app.use(cookieParser());
 app.use(auth.loadUser);
 
 const send = (req, res, title, body, status = 200) =>
-  res.status(status).send(layout({ title, user: req.user, flash: req.query.msg, body }));
+  res.status(status).send(layout({ title, user: req.user, flash: req.query.msg, body, path: req.path }));
 const back = (res, url, msg) => res.redirect(url + (msg ? (url.includes('?') ? '&' : '?') + 'msg=' + encodeURIComponent(msg) : ''));
 const home = (u) => (u.role === 'admin' ? '/admin' : u.role === 'contractor' ? '/jobs' : '/');
 const isAdmin = (u) => u.role === 'admin';

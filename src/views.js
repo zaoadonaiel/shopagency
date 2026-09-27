@@ -1,39 +1,98 @@
 // Tiny server-rendered UI. No build step, no framework.
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// Same look as the main site (theagencyschool.com): colors, fonts and logo come from its src/styles/global.css.
+const MAIN_SITE = (process.env.MAIN_SITE_URL || 'https://theagencyschool.com').replace(/\/$/, '');
+
 const css = `
-:root{--bg:#f4f7fa;--card:#fff;--ink:#22282f;--muted:#5b6570;--line:#d9e2eb;--blue:#2f6db0;--good:#1e7a4f;--warn:#9a6200;--bad:#b3261e}
-@media(prefers-color-scheme:dark){:root{--bg:#12161b;--card:#1a2027;--ink:#e8eef4;--muted:#9aa7b3;--line:#2b3540;--blue:#6fa8e8;--good:#5fcb92;--warn:#f0b85a;--bad:#f2867f}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
-a{color:var(--blue)}header{background:var(--card);border-bottom:1px solid var(--line)}
-.bar{max-width:1000px;margin:auto;padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;justify-content:space-between}
-.bar nav{display:flex;flex-wrap:wrap;gap:6px 16px}.brand{font-weight:700;text-decoration:none;color:var(--ink)}
-main{max-width:1000px;margin:auto;padding:24px 16px 60px}h1{font-size:26px;margin:0 0 16px}h2{font-size:19px;margin:24px 0 8px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
-label{display:block;font-weight:600;margin:12px 0 4px}input,select,textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
-button,.btn{display:inline-block;font:inherit;font-weight:600;background:var(--blue);color:#fff;border:0;border-radius:8px;padding:10px 16px;cursor:pointer;text-decoration:none}
-button.alt,.btn.alt{background:transparent;color:var(--blue);border:1px solid var(--line)}button.danger{background:var(--bad)}
-table{width:100%;border-collapse:collapse;font-size:15px}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
-.wrap{overflow-x:auto}.muted{color:var(--muted)}.pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:13px;border:1px solid var(--line)}
-.pill.open{color:var(--blue)}.pill.claimed{color:var(--warn)}.pill.ready,.pill.approved{color:var(--good)}.pill.refunded,.pill.dispute{color:var(--bad)}
-.msg{padding:8px 12px;border-radius:8px;background:var(--bg);margin:6px 0}.flash{padding:10px 14px;border-radius:8px;background:var(--bg);border:1px solid var(--line);margin-bottom:14px}
-.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}form.inline{display:inline}
+:root{
+  --bg:#F5F8F7;--surface:#FFFFFF;--ink:#0A2A30;--muted:#4A6166;--line:#D3E0DF;
+  --lagoon:#0F5C63;--lagoon-ink:#FFFFFF;--sun:#FFB72B;--sun-ink:#1B1300;--tint:#E4F0EE;
+  --good:#1E7A4F;--good-bg:#DDF3E7;--warn:#9A6200;--warn-bg:#FFF0CC;--bad:#B3261E;--bad-bg:#FBE4E2;
+  --display:'Bricolage Grotesque','Arial Narrow',Arial,sans-serif;
+  --body:'Figtree',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#081A1E;--surface:#0F2A30;--ink:#E8F3F2;--muted:#9BB5B7;--line:#1E3E45;
+  --lagoon:#4FB3B9;--lagoon-ink:#04191C;--tint:#123339;
+  --good:#5FCB92;--good-bg:#0F3322;--warn:#F0B85A;--warn-bg:#3A2C0C;--bad:#F2867F;--bad-bg:#3A1513;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#081A1E;--surface:#0F2A30;--ink:#E8F3F2;--muted:#9BB5B7;--line:#1E3E45;
+  --lagoon:#4FB3B9;--lagoon-ink:#04191C;--tint:#123339;
+  --good:#5FCB92;--good-bg:#0F3322;--warn:#F0B85A;--warn-bg:#3A2C0C;--bad:#F2867F;--bad-bg:#3A1513;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--body);padding-inline:16px}
+.shell{max-width:1080px;margin-inline:auto}
+a{color:var(--lagoon)}
+h1,h2,h3{font-family:var(--display);letter-spacing:-.01em;line-height:1.1;text-wrap:balance}
+h1{font-size:clamp(30px,4.6vw,44px);font-weight:800;margin:8px 0 22px}
+h2{font-size:22px;font-weight:700;margin:30px 0 12px}
+header.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding-block:18px;border-bottom:1px solid var(--line)}
+.logo{font:800 22px/1 var(--display);letter-spacing:-.01em;display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.logo i{width:26px;height:26px;border-radius:7px;background:var(--lagoon);display:grid;place-items:center;flex:none}
+.logo i::before{content:"";width:12px;height:12px;border-radius:50%;background:var(--sun)}
+.logo small{font:600 12px/1 var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--lagoon);background:var(--tint);padding:5px 8px;border-radius:99px}
+.nav{display:flex;flex-wrap:wrap;gap:4px 18px;align-items:center}
+.nav a{color:var(--ink);text-decoration:none;font-weight:500;padding:10px 2px;min-height:44px;display:inline-flex;align-items:center}
+.nav a:hover,.nav a[aria-current="page"]{color:var(--lagoon);text-decoration:underline;text-underline-offset:4px}
+.nav .btn{color:var(--sun-ink);text-decoration:none;padding:12px 18px}
+main{padding-block:28px 64px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px}
+form.card:not(:has(.row)){max-width:600px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.grid .card{display:grid;gap:10px;align-content:start;margin:0}
+.grid .card h2{font-size:24px;font-weight:800;margin:0}
+.grid .card p{margin:0}.grid .card p:not(:has(b)){color:var(--muted)}
+.grid .card b{font:800 34px/1 var(--display);font-variant-numeric:tabular-nums}
+.grid .card .btn{justify-self:start;margin-top:6px}
+label{display:block;font-weight:600;margin:14px 0 6px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:12px 14px}
+input[type=checkbox]{width:auto;accent-color:var(--lagoon)}
+button,.btn{display:inline-block;background:var(--sun);color:var(--sun-ink);font:700 16px/1 var(--display);padding:14px 20px;border-radius:10px;text-decoration:none;border:0;cursor:pointer}
+button.alt,.btn.alt{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+button.danger{background:var(--bad);color:#fff}
+button:hover,.btn:hover{filter:brightness(1.06)}
+button:focus-visible,.btn:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--lagoon);outline-offset:2px}
+table{width:100%;border-collapse:collapse;font-size:15px;font-variant-numeric:tabular-nums}
+th{font:600 12px/1.2 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.wrap{overflow-x:auto}
+.muted{color:var(--muted)}
+.pill{display:inline-block;font:600 12px/1 var(--body);padding:5px 10px;border-radius:99px;background:var(--tint);color:var(--lagoon)}
+.pill.pending_payment,.pill.cancelled{background:var(--tint);color:var(--muted)}
+.pill.claimed{background:var(--warn-bg);color:var(--warn)}
+.pill.ready,.pill.approved{background:var(--good-bg);color:var(--good)}
+.pill.refunded,.pill.dispute{background:var(--bad-bg);color:var(--bad)}
+.msg{padding:12px 14px;border-radius:12px;background:var(--tint);margin:8px 0}
+.flash{padding:12px 16px;border-radius:12px;background:var(--tint);color:var(--ink);font-weight:500;margin-bottom:18px;border-left:4px solid var(--lagoon)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}form.inline{display:inline}
+footer{border-top:1px solid var(--line);padding-block:24px 40px;color:var(--muted);font-size:13.5px;display:grid;gap:8px}
+footer nav{display:flex;flex-wrap:wrap;gap:4px 18px}
+footer a{color:var(--muted);padding:8px 0;display:inline-block}footer a:hover{color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){button,.btn{transition:filter .15s}}
 `;
 
-function layout({ title, user, flash, body }) {
-  const nav = [];
+const FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+  + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;500;600&display=swap">';
+const FAVICON = `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#0F5C63"/><circle cx="32" cy="32" r="14" fill="#FFB72B"/></svg>')}">`;
+
+function layout({ title, user, flash, body, path = '' }) {
+  const links = [];
   if (user) {
-    if (user.role === 'buyer') nav.push('<a href="/">Order</a>', '<a href="/orders">My orders</a>');
-    if (user.role === 'contractor') nav.push('<a href="/jobs">Jobs</a>', '<a href="/earnings">My earnings</a>');
-    if (user.role === 'admin') nav.push('<a href="/jobs">Jobs</a>', '<a href="/admin">Orders</a>', '<a href="/admin/payouts">Payouts</a>', '<a href="/admin/packages">Packages</a>', '<a href="/admin/contractors">Contractors</a>');
+    if (user.role === 'buyer') links.push(['/', 'Order'], ['/orders', 'My orders']);
+    if (user.role === 'contractor') links.push(['/jobs', 'Jobs'], ['/earnings', 'My earnings']);
+    if (user.role === 'admin') links.push(['/jobs', 'Jobs'], ['/admin', 'Orders'], ['/admin/payouts', 'Payouts'], ['/admin/packages', 'Packages'], ['/admin/contractors', 'Contractors']);
   }
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)} | The Agency School Shop</title><style>${css}</style></head><body>
-<header><div class="bar"><a class="brand" href="/">The Agency School Shop</a><nav>${nav.join('')}${user
+  const nav = links.map(([href, label]) => `<a href="${href}"${path === href ? ' aria-current="page"' : ''}>${label}</a>`);
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>${esc(title)} | The Agency School Shop</title><meta name="theme-color" content="#0A2A30"><meta name="color-scheme" content="light dark">${FAVICON}${FONTS}<style>${css}</style></head><body>
+<div class="shell"><header class="top"><a class="logo" href="/" aria-label="The Agency School Shop home"><i aria-hidden="true"></i>The Agency School <small>Shop</small></a><nav class="nav" aria-label="Main">${nav.join('')}${user
     ? `<form class="inline" method="post" action="/logout"><button class="alt" type="submit">Log out (${esc(user.name.split(' ')[0])})</button></form>`
-    : '<a href="/login">Log in</a><a href="/signup">Sign up</a>'}</nav></div></header>
-<main>${flash ? `<div class="flash">${esc(flash)}</div>` : ''}<h1>${esc(title)}</h1>${body}</main></body></html>`;
+    : '<a href="/login">Log in</a><a class="btn" href="/signup">Sign up</a>'}</nav></header>
+<main id="main">${flash ? `<div class="flash" role="status">${esc(flash)}</div>` : ''}<h1>${esc(title)}</h1>${body}</main>
+<footer><nav aria-label="Footer"><a href="${MAIN_SITE}/">theagencyschool.com</a><a href="${MAIN_SITE}/terms/">Terms of service</a><a href="${MAIN_SITE}/privacy-policy/">Privacy policy</a><a href="${MAIN_SITE}/refund-policy/">Refund policy</a><a href="${MAIN_SITE}/contact/">Contact</a></nav>
+<span>&copy; ${new Date().getFullYear()} The Agency School. All rights reserved. Contractor services are provided by independent contractors, subject to availability.</span></footer></div></body></html>`;
 }
 
 const statusLabel = { pending_payment: 'Awaiting payment', open: 'Waiting for a contractor', claimed: 'In progress', ready: 'Ready for review', approved: 'Approved', refunded: 'Refunded', cancelled: 'Cancelled' };
