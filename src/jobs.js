@@ -72,8 +72,8 @@ async function claimJob(orderId, user) {
   }
 
   const buyer = await getUser(o.buyer_id);
-  await sendMail(buyer.email, `A contractor is working on your ${o.package_name}`,
-    `Good news, ${buyer.name}. ${user.name.split(' ')[0]} claimed your order and your site is being built.\n\nDeadline: ${new Date(dueAt).toUTCString()}\nMessage your contractor here: ${APP_URL()}/orders/${orderId}\n`);
+  await sendMail(buyer.email, `We are working on your ${o.package_name}`,
+    `Good news, ${buyer.name}. ${user.name.split(' ')[0]} from our team is building your order now.\n\nDeadline: ${new Date(dueAt).toUTCString()}\nMessage us here: ${APP_URL()}/orders/${orderId}\n`);
   return { ok: true };
 }
 
@@ -107,7 +107,7 @@ async function markDone(orderId, user, { siteUrl, pagesBuilt }) {
   if (!rows.length) return { ok: false, error: 'Not your job.' };
   const fresh = rows[0];
 
-  let loginUrl = '(ask your contractor for a login link)';
+  let loginUrl = '(message us on your order for a login link)';
   try { loginUrl = (await createLoginLink(fresh)).loginUrl; } catch (err) { console.error('Login link failed', err.message); }
 
   const buyer = await getUser(o.buyer_id);

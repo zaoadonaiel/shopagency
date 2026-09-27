@@ -92,10 +92,10 @@ function layout({ title, user, flash, body, path = '' }) {
     : '<a href="/login">Log in</a><a class="btn" href="/signup">Sign up</a>'}</nav></header>
 <main id="main">${flash ? `<div class="flash" role="status">${esc(flash)}</div>` : ''}<h1>${esc(title)}</h1>${body}</main>
 <footer><nav aria-label="Footer"><a href="${MAIN_SITE}/">theagencyschool.com</a><a href="${MAIN_SITE}/terms/">Terms of service</a><a href="${MAIN_SITE}/privacy-policy/">Privacy policy</a><a href="${MAIN_SITE}/refund-policy/">Refund policy</a><a href="${MAIN_SITE}/contact/">Contact</a></nav>
-<span>&copy; ${new Date().getFullYear()} The Agency School. All rights reserved. Contractor services are provided by independent contractors, subject to availability.</span></footer></div></body></html>`;
+<span>&copy; ${new Date().getFullYear()} The Agency School. All rights reserved.</span></footer></div></body></html>`;
 }
 
-const statusLabel = { pending_payment: 'Awaiting payment', open: 'Waiting for a contractor', claimed: 'In progress', ready: 'Ready for review', approved: 'Approved', refunded: 'Refunded', cancelled: 'Cancelled' };
+const statusLabel = { pending_payment: 'Awaiting payment', open: 'Queued', claimed: 'In progress', ready: 'Ready for review', approved: 'Approved', refunded: 'Refunded', cancelled: 'Cancelled' };
 const pill = (o) => `<span class="pill ${esc(o.status)}">${esc(statusLabel[o.status] || o.status)}</span>${o.dispute ? ' <span class="pill dispute">Under review</span>' : ''}`;
 const when = (iso) => (iso ? esc(new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })) : '');
 // "2026-09-27 14:05:09" in UTC, the same message timestamp format the SQLite version showed.

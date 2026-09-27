@@ -47,6 +47,8 @@ const back = (res, url, msg) => res.redirect(url + (msg ? (url.includes('?') ? '
 const home = (u) => (u.role === 'admin' ? '/admin' : u.role === 'contractor' ? '/jobs' : '/');
 const isAdmin = (u) => u.role === 'admin';
 const safeNext = (next, fallback) => (next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : fallback);
+// "$25.00/month" for a monthly package, "$50.00" for a one-time one.
+const price = (p) => `<b>${money(p.price_cents)}</b>${p.billing_interval ? `<span class="muted">/${esc(p.billing_interval)}</span>` : ''}`;
 const getPackage = async (id) => (isId(id) ? q(sb.from('packages').select('*').eq('id', id).eq('active', true).maybeSingle()) : null);
 const messagesFor = (orderId) => q(sb.from('messages').select('*').eq('order_id', orderId).order('id'));
 const emailTaken = (error) => error && (error.code === 'email_exists' || error.code === 'user_already_exists' || /already (been )?registered|already exists/i.test(error.message));
@@ -70,9 +72,9 @@ app.get('/healthz', async (req, res) => {
 // ---------- Public: package menu ----------
 app.get('/', async (req, res) => {
   if (req.user && req.user.role !== 'buyer') return res.redirect(home(req.user));
-  const pk = await q(sb.from('packages').select('*').eq('active', true).order('price_cents'));
-  send(req, res, 'Order a website', `<p class="muted">Pick a package. A contractor claims it, builds it on our hosting, and emails you when it is ready.</p>
-  <div class="grid">${pk.map((p) => `<div class="card"><h2 style="margin-top:0">${esc(p.name)}</h2><p>${esc(p.description)}</p><p><b>${money(p.price_cents)}</b></p><a class="btn" href="/order/${p.id}">Order</a></div>`).join('')}</div>
+  const pk = await q(sb.from('packages').select('*').eq('active', true).order('id'));
+  send(req, res, 'Order a website', `<p class="muted">Pick a package. Our 24-hour team builds it on our hosting, and emails you when it is ready.</p>
+  <div class="grid">${pk.map((p) => `<div class="card"><h2 style="margin-top:0">${esc(p.name)}</h2><p>${esc(p.description)}</p><p>${price(p)}</p><a class="btn" href="/order/${p.id}">${p.billing_interval ? 'Subscribe' : 'Order'}</a></div>`).join('')}</div>
   <p class="muted">You need your own Avada license (about $80, one time) and will enter its purchase code when you order.</p>`);
 });
 
@@ -183,7 +185,7 @@ app.get('/order/:pid', auth.requireRole('buyer'), async (req, res) => {
   const p = await getPackage(req.params.pid);
   if (!p) return res.status(404).send('Package not found');
   send(req, res, p.name, `<form class="card" method="post" action="/order/${p.id}">
-    <p>${esc(p.description)}</p><p><b>${money(p.price_cents)}</b></p>
+    <p>${esc(p.description)}</p><p>${price(p)}</p>
     <label for="business_name">Business name</label><input id="business_name" name="business_name" required>
     <label for="domain">Domain (if you have one)</label><input id="domain" name="domain" placeholder="example.com">
     <label for="avada_code">Avada license purchase code</label><input id="avada_code" name="avada_code" required>
@@ -207,7 +209,7 @@ app.post('/order/:pid', auth.requireRole('buyer'), async (req, res) => {
   const session = await stripe.checkout.sessions.create({
     mode: 'payment', customer_email: req.user.email, client_reference_id: String(id), metadata: { order_id: String(id) },
     line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: p.price_cents, product_data: { name: p.name } } }],
-    success_url: `${APP_URL}/orders/${id}?msg=${encodeURIComponent('Payment received. We are finding your contractor.')}`,
+    success_url: `${APP_URL}/orders/${id}?msg=${encodeURIComponent('Payment received. Our team is on it.')}`,
     cancel_url: `${APP_URL}/orders/${id}?msg=${encodeURIComponent('Payment was cancelled.')}`,
   });
   await q(sb.from('orders').update({ stripe_session_id: session.id }).eq('id', id));
