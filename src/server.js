@@ -6,6 +6,7 @@ const auth = require('./auth');
 const jobs = require('./jobs');
 const { sendMail } = require('./mail');
 const { esc, layout, pill, when, messagesBlock } = require('./views');
+const brand = require('./brand');
 
 const APP_URL = (process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 const stripe = process.env.STRIPE_SECRET_KEY ? require('stripe')(process.env.STRIPE_SECRET_KEY) : null;
@@ -42,6 +43,11 @@ app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), async (r
   }
   res.json({ received: true });
 });
+
+// Logo and icons (same files as the main site). Before the login check: icons need no user.
+for (const [path, img] of Object.entries(brand)) {
+  app.get(path, (req, res) => res.type('png').set('Cache-Control', 'public, max-age=86400').send(img));
+}
 
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());

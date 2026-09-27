@@ -29,8 +29,7 @@ h1{font-size:clamp(30px,4.6vw,44px);font-weight:800;margin:8px 0 22px}
 h2{font-size:22px;font-weight:700;margin:30px 0 12px}
 header.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding-block:18px;border-bottom:1px solid var(--line)}
 .logo{font:800 22px/1 var(--display);letter-spacing:-.01em;display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
-.logo i{width:26px;height:26px;border-radius:7px;background:var(--lagoon);display:grid;place-items:center;flex:none}
-.logo i::before{content:"";width:12px;height:12px;border-radius:50%;background:var(--sun)}
+.logo i{width:30px;height:30px;border-radius:8px;background:var(--lagoon) url("/icon-white.png") center/78% auto no-repeat;flex:none}
 .logo small{font:600 12px/1 var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--lagoon);background:var(--tint);padding:5px 8px;border-radius:99px}
 .nav{display:flex;flex-wrap:wrap;gap:4px 18px;align-items:center}
 .nav a{color:var(--ink);text-decoration:none;font-weight:500;padding:10px 2px;min-height:44px;display:inline-flex;align-items:center}
@@ -75,7 +74,7 @@ footer a{color:var(--muted);padding:8px 0;display:inline-block}footer a:hover{co
 
 const FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
   + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;500;600&display=swap">';
-const FAVICON = `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#0F5C63"/><circle cx="32" cy="32" r="14" fill="#FFB72B"/></svg>')}">`;
+const FAVICON = '<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png">';
 
 function layout({ title, user, flash, body, path = '' }) {
   const links = [];
